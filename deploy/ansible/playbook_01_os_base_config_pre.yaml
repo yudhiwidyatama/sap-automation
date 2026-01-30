@@ -1,0 +1,239 @@
+---
+# /*---------------------------------------------------------------------------8
+# |                                                                            |
+# |                           Validate the parameters                          |
+# |                                                                            |
+# +------------------------------------4--------------------------------------*/
+
+- hosts:                               localhost
+  name:                                "Host tasks"
+  gather_facts:                        true
+
+  # -------------------------------------+---------------------------------------8
+  #
+  # Build the list of tasks to be executed in order here.
+  #
+  # -------------------------------------+---------------------------------------8
+
+  tasks:
+    - name:                            "Example on how to ensure a package is installed"
+      ansible.builtin.package:
+        name:                          python3-jmespath
+        state:                         present
+
+    - name:                            "Example on how to ensure that a parameter is specified"
+      ansible.builtin.assert:
+        that:
+          - item_to_check.parameter is defined # Has the variable been defined
+          - item_to_check.parameter | type_debug != 'NoneType' # Is the variable not empty"
+          - item_to_check.parameter | trim | length > 1
+        fail_msg: "{{ item_to_check.error }}"
+      loop:
+        - {
+          parameter:                   "sap_sid",
+          error:                       "A SAP deployment requires that sap_sid is provided",
+        }
+      loop_control:
+        loop_var:                      item_to_check
+
+    - name:                            "Example on how to target a specific platform"
+      ansible.builtin.assert:
+        that:
+          - domain_name is defined                    # Has the variable been defined
+          - domain_name | type_debug != 'NoneType'    # Does it have a value
+          - domain_name | trim | length > 1item_to_check.parameter is defined
+        fail_msg:                      'SQL Server deployments require that domain is specified'
+      when:
+        - platform == 'SQLSERVER'
+
+
+
+# /*---------------------------------------------------------------------------8
+# |                                                                            |
+# |                  Run commands on all  remote hosts                         |
+# |                                                                            |
+# +------------------------------------4--------------------------------------*/
+
+- hosts: "{{ sap_sid | upper }}_DB  :
+    {{ sap_sid | upper }}_SCS :
+    {{ sap_sid | upper }}_ERS :
+    {{ sap_sid | upper }}_PAS :
+    {{ sap_sid | upper }}_APP :
+    {{ sap_sid | upper }}_WEB"
+
+  name:                                "Examples on how to run commands on remote hosts"
+  gather_facts:                        true
+  tasks:
+
+    - name:                            "Calculate information about the OS distribution"
+      ansible.builtin.set_fact:
+        distro_family:                 "{{ ansible_os_family | upper }}"
+        distribution_id:               "{{ ansible_distribution | lower ~ ansible_distribution_major_version }}"
+        distribution_full_id:          "{{ ansible_distribution | lower ~ ansible_distribution_version }}"
+
+    - name:                            "Show information"
+      ansible.builtin.debug:
+        msg:
+          - "Distro family:        {{ distro_family }}"
+          - "Distribution id:      {{ distribution_id }}"
+          - "Distribution full id: {{ distribution_full_id }}"
+
+    - name:                            "Set Python version for {{ distribution_id }}"
+      ansible.builtin.set_fact:
+        python_version: "python3"
+
+    - name:                            "Set Python version {{ distribution_id }}"
+      ansible.builtin.set_fact:
+        python_version: "python2"
+      when: (ansible_distribution | lower ~ ansible_distribution_major_version) in ['sles_sap12']
+
+    - name:                            "Show how to run a command on all remote host"
+      when: 
+        - distro_family != "WINDOWS"
+      block:
+
+        - name:                        "Show how to run a command on all remote host"
+          ansible.builtin.command:     "whoami"
+          register:                    whoami_results
+
+        - name:                        "Show results"
+          ansible.builtin.debug:
+            var:                       whoami_results
+            verbosity:                 0
+
+        - name:                        "Show how to run a command on just the 'SCS' and 'ERS' hosts"
+          ansible.builtin.command:     "whoami"
+          register:                    whoami_results
+          when: 
+            - "'scs' in supported_tiers or 'ers' in supported_tiers "
+
+        - name:                        "0.0 Validations - Variables"
+          ansible.builtin.debug:
+            var:                       whoami_results
+            verbosity:                 0
+
+    - name:                            "Show how to run a command on all remote host"
+      when: 
+        - distro_family == "WINDOWS"
+      block:
+
+        - name:                        "Show how to run a command on all remote host"
+          ansible.windows.win_shell:   "whoami"
+          register:                    whoami_results
+
+        - name:                        "Show results"
+          ansible.builtin.debug:
+            var:                       whoami_results
+            verbosity:                 0
+
+        - name:                        "Show how to run a command on just the 'SCS' and 'ERS' hosts"
+          ansible.windows.win_shell:   "whoami"
+          register:                    whoami_results
+          when: 
+            - "'scs' in supported_tiers or 'ers' in supported_tiers "
+
+        - name:                        "0.0 Validations - Variables"
+          ansible.builtin.debug:
+            var:                       whoami_results
+            verbosity:                 0
+
+    # /*-----------------------------------------------------------------------8
+    # |  SUSE BYOS Registration                                                |
+    # |  Variables passed via Azure DevOps Variable Group (SDAF-General):      |
+    # |    - suse_reg_code: SUSE Customer Center registration code             |
+    # |    - suse_reg_email: Email associated with SUSE subscription           |
+    # +-----------------------------------------------------------------------*/
+
+    - name:                            "SUSE BYOS Registration"
+      when:
+        - distro_family == "SUSE"
+        - suse_reg_code is defined
+        - suse_reg_code | length > 0
+        - suse_reg_email is defined
+        - suse_reg_email | length > 0
+      block:
+        - name:                        "SUSE BYOS - Check current registration status"
+          ansible.builtin.command:     SUSEConnect --status
+          register:                    suse_status
+          changed_when:                false
+          failed_when:                 false
+
+        - name:                        "SUSE BYOS - Show current registration status"
+          ansible.builtin.debug:
+            msg:                       "Current SUSE status: {{ suse_status.stdout | default('Not registered') }}"
+
+        - name:                        "SUSE BYOS - Cleanup and register"
+          when:                        suse_status.rc != 0 or 'Not Registered' in suse_status.stdout
+          block:
+            - name:                    "SUSE BYOS - Cleanup existing registration"
+              ansible.builtin.shell: |
+                                          SUSEConnect --cleanup || true
+                                          rm -f /etc/SUSEConnect
+                                          rm -f /etc/zypp/{repos,services,credentials}.d/*
+                                          rm -f /usr/lib/zypp/plugins/services/*
+                                          sed -i '/^# Added by SMT reg/,+1d' /etc/hosts
+              environment:
+                ZYPP_LOCK_TIMEOUT:     "60"
+
+            - name:                    "SUSE BYOS - Register with SUSE Customer Center"
+              ansible.builtin.command: >
+                                          SUSEConnect
+                                          -r {{ suse_reg_code }}
+                                          -e {{ suse_reg_email }}
+              register:                byos_reg_result
+              environment:
+                ZYPP_LOCK_TIMEOUT:     "60"
+              no_log:                  true
+
+            - name:                    "SUSE BYOS - Wait for registration to propagate"
+              ansible.builtin.wait_for:
+                timeout:               15
+
+            - name:                    "SUSE BYOS - Activate SAP Applications module"
+              ansible.builtin.command: >
+                                          SUSEConnect -p sle-module-sap-applications/{{ ansible_distribution_version }}/x86_64
+              register:                sap_module_result
+              environment:
+                ZYPP_LOCK_TIMEOUT:     "60"
+              failed_when:             false
+
+            - name:                    "SUSE BYOS - Activate Public Cloud module"
+              ansible.builtin.command: >
+                                          SUSEConnect -p sle-module-public-cloud/{{ ansible_distribution_version }}/x86_64
+              register:                cloud_module_result
+              environment:
+                ZYPP_LOCK_TIMEOUT:     "60"
+              failed_when:             false
+
+            - name:                    "SUSE BYOS - Refresh repositories"
+              ansible.builtin.command: zypper --non-interactive refresh
+              register:                zypper_refresh
+              environment:
+                ZYPP_LOCK_TIMEOUT:     "60"
+              retries:                 3
+              delay:                   10
+              until:                   zypper_refresh.rc == 0
+
+            - name:                    "SUSE BYOS - Verify registration"
+              ansible.builtin.command: SUSEConnect --status
+              register:                final_status
+              changed_when:            false
+
+            - name:                    "SUSE BYOS - Show final registration status"
+              ansible.builtin.debug:
+                msg:                   "SUSE Registration complete: {{ final_status.stdout }}"
+
+        - name:                        "SUSE BYOS - Already registered"
+          ansible.builtin.debug:
+            msg:                       "SUSE is already registered, skipping BYOS registration"
+          when:                        suse_status.rc == 0 and 'Not Registered' not in suse_status.stdout
+
+    - name:                            "SUSE BYOS - Skip (not SUSE or no credentials)"
+      ansible.builtin.debug:
+        msg:                           "Skipping SUSE BYOS registration - either not SUSE ({{ distro_family }}) or credentials not provided"
+      when:
+        - distro_family != "SUSE" or suse_reg_code is not defined or suse_reg_code | length == 0
+
+# /*----------------------------------------------------------------------------8
+# |                                    END                                      |
+# +------------------------------------4--------------------------------------*/
