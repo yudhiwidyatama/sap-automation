@@ -172,8 +172,6 @@ fi
 filename=./config/Ansible/"${filename_without_prefix}"_pre.yml
 
 echo "Check if file: ${filename} exists"
-echo "$PWD/${filename}"
-ls -l "${filename}"
 
 if [ -f "${filename}" ]; then
 	echo "##[group]- preconfiguration"
