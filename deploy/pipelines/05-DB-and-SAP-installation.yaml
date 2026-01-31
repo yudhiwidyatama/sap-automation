@@ -467,6 +467,8 @@ stages:
               - template:                         templates\run-ansible.yaml
                 parameters:
                   displayName:                    SAP on Azure quality checks
+                  ansibleFilePath:                ${{ parameters.sap_automation_repo_path }}/deploy/ansible/playbook_06_02_sap_on_azure_quality_checks.yaml
+                  ansibleConfigPath:              ${{ parameters.sap_automation_repo_path }}/deploy/ansible/ansible.cfg
                   ARM_CLIENT_ID:                  $(ARM_CLIENT_ID)
                   ARM_CLIENT_SECRET:              $(ARM_CLIENT_SECRET)
                   ARM_SUBSCRIPTION_ID:            $(ARM_SUBSCRIPTION_ID)
