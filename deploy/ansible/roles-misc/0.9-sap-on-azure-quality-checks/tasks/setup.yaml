@@ -8,6 +8,16 @@
 # +------------------------------------4--------------------------------------*/
 ---
 
+# DEBUG: Show workspace directory
+- name:                            "SAP on Azure quality checks: - [DEBUG] Show workspace directory"
+  ansible.builtin.debug:
+    msg:
+                                   - "==================== WORKSPACE CONFIGURATION ==================="
+                                   - "Workspace Directory: {{ _workspace_directory }}"
+                                   - "Orchestration User: {{ orchestration_ansible_user }}"
+                                   - "PowerShell Version: {{ powershell_version }}"
+                                   - "================================================================"
+
 - name:                            "SAP on Azure quality checks: - setup directories"
   become:                          true
   become_user:                     root
@@ -20,6 +30,23 @@
     - { path: "/opt/microsoft/powershell/v{{ powershell_version }}", owner: "root" }
     - { path: "/opt/microsoft/quality_check", owner: "{{ orchestration_ansible_user }}" }
     - { path: "{{ _workspace_directory }}/quality_assurance", owner: "{{ orchestration_ansible_user }}" }
+
+# DEBUG: Verify directories were created
+- name:                            "SAP on Azure quality checks: - [DEBUG] Verify directories created"
+  ansible.builtin.stat:
+    path:                          "{{ item }}"
+  register:                        qc_dir_stat
+  loop:
+    - "/opt/microsoft/powershell/v{{ powershell_version }}"
+    - "/opt/microsoft/quality_check"
+    - "{{ _workspace_directory }}/quality_assurance"
+
+- name:                            "SAP on Azure quality checks: - [DEBUG] Show directory creation status"
+  ansible.builtin.debug:
+    msg:
+                                   - "==================== DIRECTORY CREATION STATUS ================="
+                                   - "{{ item.item }}: {{ 'EXISTS' if item.stat.exists else 'MISSING' }} (owner: {{ item.stat.pw_name | default('N/A') }})"
+  loop:                            "{{ qc_dir_stat.results }}"
 
 
 - name:                            "SAP on Azure quality checks: - extract PowerShell binary"
