@@ -49,8 +49,19 @@ locals {
 
   deployer_subscription_id           = length(local.spn_key_vault_arm_id) > 0 ? split("/", local.spn_key_vault_arm_id)[2] : ""
 
+  # Convert JSON tuples to Terraform lists to match sap_namegenerator output types
+  # This fixes type mismatch errors when using custom naming JSON files
+  # See: ~/docs/D00_CUSTOM_NAMING_TROUBLESHOOTING_SESSION.md for details
   custom_names                       = length(var.name_override_file) > 0 ? (
-                                        jsondecode(file(format("%s/%s", path.cwd, var.name_override_file)))) : (
+                                        {
+                                          for k, v in jsondecode(file(format("%s/%s", path.cwd, var.name_override_file))) :
+                                          k => (
+                                            k == "virtualmachine_names" ? {
+                                              for vm_key, vm_val in v :
+                                              vm_key => [for item in vm_val : item]  # Convert tuple to list
+                                            } : v
+                                          )
+                                        }) : (
                                         null
                                       )
   workload_zone_name                 = coalesce(var.workload_zone_name, upper(format("%s-%s-%s", var.environment, module.sap_namegenerator.naming_new.location_short, var.network_logical_name)))
