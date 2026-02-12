@@ -122,6 +122,20 @@
 - name:                            "SAP on Azure quality checks: - Run quality check"
   ansible.builtin.shell:
     cmd: >-
+                                   Import-Module Az.Accounts -RequiredVersion 4.2.0 -ErrorAction Stop
+
+                                   if (-not (Get-Command Connect-AzAccount -ErrorAction SilentlyContinue)) {
+                                     throw "FATAL: Connect-AzAccount not available after importing Az.Accounts 4.2.0"
+                                   }
+
+                                   Import-Module Az.Compute -ErrorAction Stop
+
+                                   Import-Module Az.Network -ErrorAction Stop
+
+                                   Import-Module Az.NetAppFiles -ErrorAction Stop
+
+                                   Import-Module Posh-SSH -ErrorAction Stop
+
                                    Connect-AzAccount -AccountId {{ gz_arm_client_id_result.stdout }} `
                                                      -AccessToken {{ qc_access_token_result.stdout }} `
                                                      -Subscription {{ qc_subscription_id }}
@@ -204,11 +218,23 @@
                                    - "Expected: 1 HTML file per VM"
                                    - "==============================================================="
 
-# DEBUG: Check if execution actually failed (now that we've captured debug info)
-- name:                            "SAP on Azure quality checks: - [DEBUG] Fail if quality check had errors"
+# Verify both exit code AND HTML file generation
+- name:                            "SAP on Azure quality checks: - Verify execution succeeded"
   ansible.builtin.fail:
-    msg:                           "Quality check failed with return code {{ quality_check_result.rc }}"
-  when:                            quality_check_result.rc != 0
+    msg: |
+      Quality check failed:
+      - Exit code: {{ quality_check_result.rc }}
+      - HTML files found: {{ qc_html_count.stdout | default('0') }}
+      - Expected: At least 1 HTML file per VM
+
+      Check QUALITY CHECK STDOUT and STDERR sections above for errors.
+      Common issues:
+      - Az.Accounts 5.x installed (should be 4.2.0)
+      - Connect-AzAccount cmdlet not available
+      - SSH key permissions or connectivity issues
+  when: >
+    quality_check_result.rc != 0 or
+    (qc_html_count.stdout | default('0') | int) == 0
 
 - name:                            "SAP on Azure quality checks: - Debug quality check result"
   ansible.builtin.debug:

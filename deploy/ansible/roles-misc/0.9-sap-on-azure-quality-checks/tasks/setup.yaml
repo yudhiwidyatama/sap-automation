@@ -109,6 +109,52 @@
     chdir:                         "/opt/microsoft/quality_check"
     executable:                    "/usr/local/bin/pwsh"
 
+- name:                            "SAP on Azure quality checks: - Remove Az.Accounts 5.x (broken version)"
+  become:                          true
+  become_user:                     root
+  ansible.builtin.shell: |
+                                   # List all installed Az.Accounts versions
+                                   Write-Host "Checking for Az.Accounts versions..." -ForegroundColor Yellow
+                                   $versions = Get-Module -ListAvailable Az.Accounts | Select-Object Version
+
+                                   foreach ($ver in $versions) {
+                                     Write-Host "Found Az.Accounts version: $($ver.Version)" -ForegroundColor Cyan
+                                   }
+
+                                   # Remove ALL Az.Accounts versions (especially 5.x)
+                                   Write-Host "Removing all Az.Accounts versions..." -ForegroundColor Yellow
+                                   Get-Module -ListAvailable Az.Accounts | ForEach-Object {
+                                     Write-Host "Uninstalling Az.Accounts $($_.Version)..." -ForegroundColor Yellow
+                                     Uninstall-Module -Name Az.Accounts -RequiredVersion $_.Version -Force -ErrorAction SilentlyContinue
+                                   }
+
+                                   # Also remove from file system to be certain
+                                   $modulePaths = @(
+                                     "/usr/local/share/powershell/Modules/Az.Accounts",
+                                     "/opt/microsoft/powershell/Modules/Az.Accounts",
+                                     "$HOME/.local/share/powershell/Modules/Az.Accounts"
+                                   )
+
+                                   foreach ($path in $modulePaths) {
+                                     if (Test-Path $path) {
+                                       Write-Host "Removing directory: $path" -ForegroundColor Yellow
+                                       Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                                     }
+                                   }
+
+                                   Write-Host "✓ All Az.Accounts versions removed" -ForegroundColor Green
+  register:                        qc_cleanup_result
+  failed_when:                     qc_cleanup_result.rc != 0
+  args:
+    executable:                    "/usr/local/bin/pwsh"
+
+- name:                            "SAP on Azure quality checks: - [DEBUG] Show Az.Accounts cleanup output"
+  ansible.builtin.debug:
+    msg:
+                                   - "==================== AZ.ACCOUNTS CLEANUP OUTPUT ================="
+                                   - "{{ qc_cleanup_result.stdout_lines | default(['No output']) }}"
+                                   - "================================================================="
+
 - name:                            "SAP on Azure quality checks: - install PowerShell modules (version-locked for PS 7.3.12 compatibility)"
   become:                          true
   become_user:                     root
@@ -120,6 +166,21 @@
                                    # See: https://github.com/Azure/azure-powershell/issues/28495
                                    Write-Host "Installing Az.Accounts {{ az_accounts_version }} (PowerShell 7.3.12 compatible)..." -ForegroundColor Yellow
                                    Install-Module Az.Accounts -RequiredVersion {{ az_accounts_version }} -Force -Scope AllUsers -AllowClobber -Confirm:$false
+
+                                   # VERIFY only 4.2.0 is installed
+                                   $installedVersions = Get-Module -ListAvailable Az.Accounts
+                                   if ($installedVersions.Count -ne 1) {
+                                     Write-Host "ERROR: Multiple Az.Accounts versions found!" -ForegroundColor Red
+                                     $installedVersions | ForEach-Object { Write-Host "  - Version: $($_.Version)" -ForegroundColor Red }
+                                     throw "Expected only Az.Accounts 4.2.0, but found multiple versions"
+                                   }
+
+                                   if ($installedVersions[0].Version -ne "4.2.0") {
+                                     Write-Host "ERROR: Wrong Az.Accounts version installed: $($installedVersions[0].Version)" -ForegroundColor Red
+                                     throw "Expected Az.Accounts 4.2.0, but got $($installedVersions[0].Version)"
+                                   }
+
+                                   Write-Host "✓ Az.Accounts 4.2.0 confirmed as ONLY installed version" -ForegroundColor Green
 
                                    # Install compatible Az modules that work with Az.Accounts {{ az_accounts_version }}
                                    Write-Host "Installing Az.Compute {{ az_compute_version }}..." -ForegroundColor Yellow
@@ -142,14 +203,31 @@
                                    Import-Module Az.Network -ErrorAction Stop
                                    Import-Module Posh-SSH -ErrorAction Stop
 
+                                   # VERIFY Connect-AzAccount is available
+                                   if (-not (Get-Command Connect-AzAccount -ErrorAction SilentlyContinue)) {
+                                     throw "ERROR: Connect-AzAccount cmdlet not found after importing Az.Accounts 4.2.0"
+                                   }
+
                                    Write-Host "✓ All modules installed and verified successfully" -ForegroundColor Green
+                                   Write-Host "✓ Connect-AzAccount cmdlet confirmed available" -ForegroundColor Green
   register:                        qc_modules_result
   failed_when:                     qc_modules_result.rc != 0
   args:
     chdir:                         "/opt/microsoft/quality_check"
     executable:                    "/usr/local/bin/pwsh"
 
-- name:                            "SAP on Azure quality checks: - Display module installation output"
+- name:                            "SAP on Azure quality checks: - [DEBUG] Show module installation output"
   ansible.builtin.debug:
-    var:                           qc_modules_result.stdout_lines
+    msg:
+                                   - "==================== MODULE INSTALLATION OUTPUT ================="
+                                   - "{{ qc_modules_result.stdout_lines | default(['No output']) }}"
+                                   - "================================================================="
+
+- name:                            "SAP on Azure quality checks: - [DEBUG] Show module installation errors"
+  ansible.builtin.debug:
+    msg:
+                                   - "==================== MODULE INSTALLATION ERRORS ================="
+                                   - "{{ qc_modules_result.stderr_lines | default(['No errors']) }}"
+                                   - "================================================================="
+  when:                            qc_modules_result.stderr is defined and qc_modules_result.stderr != ""
 ...

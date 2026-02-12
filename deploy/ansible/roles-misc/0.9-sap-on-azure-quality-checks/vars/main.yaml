@@ -11,7 +11,8 @@ powershell_version: 7.3.12
 az_accounts_version: 4.2.0
 az_compute_version: 9.2.0
 az_network_version: 7.4.0
-az_netappfiles_version: 0.16.0
+# Updated from 0.16.0 to 0.25.0 - QualityCheck.ps1 requires version > 0.24.0
+az_netappfiles_version: 0.25.0
 
 # https://github.com/Azure/SAP-on-Azure-Scripts-and-Utilities/blob/main/QualityCheck/QualityCheck.ps1
 vm_operating_system_map:
