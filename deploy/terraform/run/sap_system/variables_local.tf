@@ -52,13 +52,14 @@ locals {
   # Convert JSON tuples to Terraform lists to match sap_namegenerator output types
   # This fixes type mismatch errors when using custom naming JSON files
   # See: ~/docs/D00_CUSTOM_NAMING_TROUBLESHOOTING_SESSION.md for details
+  # UPDATED: Use explicit tolist() to force type conversion (not just [for...])
   custom_names                       = length(var.name_override_file) > 0 ? (
                                         {
                                           for k, v in jsondecode(file(format("%s/%s", path.cwd, var.name_override_file))) :
                                           k => (
                                             k == "virtualmachine_names" ? {
                                               for vm_key, vm_val in v :
-                                              vm_key => [for item in vm_val : item]  # Convert tuple to list
+                                              vm_key => tolist(vm_val)  # Explicit tolist() conversion
                                             } : v
                                           )
                                         }) : (
