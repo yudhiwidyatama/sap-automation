@@ -148,4 +148,8 @@
   args:
     chdir:                         "/opt/microsoft/quality_check"
     executable:                    "/usr/local/bin/pwsh"
+
+- name:                            "SAP on Azure quality checks: - Display module installation output"
+  ansible.builtin.debug:
+    var:                           qc_modules_result.stdout_lines
 ...
