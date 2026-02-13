@@ -49,9 +49,33 @@ locals {
 
   deployer_subscription_id           = length(local.spn_key_vault_arm_id) > 0 ? split("/", local.spn_key_vault_arm_id)[2] : ""
 
-  custom_names                       = length(var.name_override_file) > 0 ? (
+  // Custom naming: Load from JSON file (jsondecode creates tuples from JSON arrays)
+  custom_names_raw                   = length(var.name_override_file) > 0 ? (
                                         jsondecode(file(format("%s/%s", path.cwd, var.name_override_file)))) : (
                                         null
                                       )
+
+  // Convert specific attributes from tuple to list to match sap_namegenerator types
+  // Per Build 143 debug output, only ANYDB_* and HANA_* attributes are lists in generator
+  // All others (ANCHOR, SCS, etc) are tuples in generator, so leave custom naming as tuples
+  // See: ~/docs/actual_sap_namegenerator_types_from_build143.md
+  custom_names                       = local.custom_names_raw == null ? null : {
+                                        for k, v in local.custom_names_raw :
+                                        k => (
+                                          k == "virtualmachine_names" ? {
+                                            for vm_key, vm_val in v :
+                                            vm_key => (
+                                              contains([
+                                                "ANYDB_COMPUTERNAME",
+                                                "ANYDB_VMNAME",
+                                                "HANA_COMPUTERNAME",
+                                                "HANA_SECONDARY_DNSNAME",
+                                                "HANA_VMNAME"
+                                              ], vm_key) ? [for item in vm_val : item] : vm_val  # Convert tuple → list for specific keys only
+                                            )
+                                          } : v
+                                        )
+                                      }
+
   workload_zone_name                 = coalesce(var.workload_zone_name, upper(format("%s-%s-%s", var.environment, module.sap_namegenerator.naming_new.location_short, var.network_logical_name)))
 }
