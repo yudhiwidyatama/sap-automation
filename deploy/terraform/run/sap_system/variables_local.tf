@@ -55,25 +55,29 @@ locals {
                                         null
                                       )
 
-  // Convert specific attributes from tuple to list to match sap_namegenerator types
-  // Per Build 143 debug output, only ANYDB_* and HANA_* attributes are lists in generator
-  // All others (ANCHOR, SCS, etc) are tuples in generator, so leave custom naming as tuples
-  // See: ~/docs/actual_sap_namegenerator_types_from_build143.md
-  // Using tolist() explicitly to force type conversion
+  // COMPLETE FIX: Convert ALL attributes to lists (both custom names and generator)
+  // Root cause: Terraform type coercion - when some attributes are lists, ALL get coerced to lists
+  // Solution: Convert ALL attributes on both sides to lists for consistency
+  // See: ~/docs/build_145_error_root_cause.md for detailed analysis
+
+  // Convert ALL custom naming virtualmachine_names attributes to lists
   custom_names                       = local.custom_names_raw == null ? null : {
                                         for k, v in local.custom_names_raw :
                                         k => (
                                           k == "virtualmachine_names" ? {
                                             for vm_key, vm_val in v :
-                                            vm_key => (
-                                              contains([
-                                                "ANYDB_COMPUTERNAME",
-                                                "ANYDB_VMNAME",
-                                                "HANA_COMPUTERNAME",
-                                                "HANA_SECONDARY_DNSNAME",
-                                                "HANA_VMNAME"
-                                              ], vm_key) ? tolist(vm_val) : vm_val  # Use tolist() to explicitly convert tuple → list
-                                            )
+                                            vm_key => tolist(vm_val)  # Convert ALL to lists
+                                          } : v
+                                        )
+                                      }
+
+  // Convert ALL generator virtualmachine_names attributes to lists
+  generator_as_lists                = {
+                                        for k, v in module.sap_namegenerator.naming :
+                                        k => (
+                                          k == "virtualmachine_names" ? {
+                                            for vm_key, vm_val in v :
+                                            vm_key => tolist(vm_val)  # Convert ALL to lists
                                           } : v
                                         )
                                       }
