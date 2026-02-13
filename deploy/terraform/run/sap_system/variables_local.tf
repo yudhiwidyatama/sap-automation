@@ -59,6 +59,7 @@ locals {
   // Per Build 143 debug output, only ANYDB_* and HANA_* attributes are lists in generator
   // All others (ANCHOR, SCS, etc) are tuples in generator, so leave custom naming as tuples
   // See: ~/docs/actual_sap_namegenerator_types_from_build143.md
+  // Using tolist() explicitly to force type conversion
   custom_names                       = local.custom_names_raw == null ? null : {
                                         for k, v in local.custom_names_raw :
                                         k => (
@@ -71,7 +72,7 @@ locals {
                                                 "HANA_COMPUTERNAME",
                                                 "HANA_SECONDARY_DNSNAME",
                                                 "HANA_VMNAME"
-                                              ], vm_key) ? [for item in vm_val : item] : vm_val  # Convert tuple → list for specific keys only
+                                              ], vm_key) ? tolist(vm_val) : vm_val  # Use tolist() to explicitly convert tuple → list
                                             )
                                           } : v
                                         )
