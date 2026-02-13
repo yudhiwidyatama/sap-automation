@@ -260,14 +260,16 @@ output "debug_namegenerator_raw"       {
                                          value       = module.sap_namegenerator.naming
                                        }
 
-output "debug_vm_names_types"          {
-                                         description = "DEBUG: VM names with type inspection"
+output "debug_vm_names_values"         {
+                                         description = "DEBUG: VM names values and lengths"
                                          value       = {
                                            for k, v in module.sap_namegenerator.naming.virtualmachine_names :
                                            k => {
-                                             value = v
-                                             type  = type(v)
+                                             value  = v
                                              length = try(length(v), 0)
+                                             # Type will be inferred from structure:
+                                             # - tuple: shown as (item1, item2) or parens in JSON
+                                             # - list: shown as [item1, item2] or brackets in JSON
                                            }
                                          }
                                        }
