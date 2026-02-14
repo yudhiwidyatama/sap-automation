@@ -55,32 +55,33 @@ locals {
                                         null
                                       )
 
-  // COMPLETE FIX: Convert ALL attributes to lists (both custom names and generator)
+  // COMPLETE FIX: Convert ALL virtualmachine_names attributes to lists
   // Root cause: Terraform type coercion - when some attributes are lists, ALL get coerced to lists
-  // Solution: Convert ALL attributes on both sides to lists for consistency
+  // Solution: Convert ALL virtualmachine_names attributes on both sides to lists
+  // Use merge() to avoid type inconsistency errors
   // See: ~/docs/build_145_error_root_cause.md for detailed analysis
 
   // Convert ALL custom naming virtualmachine_names attributes to lists
-  custom_names                       = local.custom_names_raw == null ? null : {
-                                        for k, v in local.custom_names_raw :
-                                        k => (
-                                          k == "virtualmachine_names" ? {
-                                            for vm_key, vm_val in v :
+  custom_names                       = local.custom_names_raw == null ? null : merge(
+                                        local.custom_names_raw,
+                                        {
+                                          virtualmachine_names = {
+                                            for vm_key, vm_val in local.custom_names_raw.virtualmachine_names :
                                             vm_key => tolist(vm_val)  # Convert ALL to lists
-                                          } : v
-                                        )
-                                      }
+                                          }
+                                        }
+                                      )
 
   // Convert ALL generator virtualmachine_names attributes to lists
-  generator_as_lists                = {
-                                        for k, v in module.sap_namegenerator.naming :
-                                        k => (
-                                          k == "virtualmachine_names" ? {
-                                            for vm_key, vm_val in v :
+  generator_as_lists                = merge(
+                                        module.sap_namegenerator.naming,
+                                        {
+                                          virtualmachine_names = {
+                                            for vm_key, vm_val in module.sap_namegenerator.naming.virtualmachine_names :
                                             vm_key => tolist(vm_val)  # Convert ALL to lists
-                                          } : v
-                                        )
-                                      }
+                                          }
+                                        }
+                                      )
 
   workload_zone_name                 = coalesce(var.workload_zone_name, upper(format("%s-%s-%s", var.environment, module.sap_namegenerator.naming_new.location_short, var.network_logical_name)))
 }
