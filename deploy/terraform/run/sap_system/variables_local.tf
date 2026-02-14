@@ -73,15 +73,17 @@ locals {
                                       )
 
   // Merge custom naming with generator (fill missing keys with generator values)
-  // Custom naming JSON only has virtualmachine_names, but module expects all 9 keys
-  // Missing keys: availabilityset_names, keyvault_names, ppg_names, prefix,
-  //               resource_prefixes, resource_suffixes, separator, storageaccount_names
+  // Strategy: Start with generator (all 9 keys), override with custom JSON keys,
+  //           then convert virtualmachine_names arrays to lists
+  // This allows custom JSON to override ANY key (storageaccount_names, ppg_names, etc.)
+  // while keeping generator defaults for missing keys
   custom_names                       = local.custom_names_raw == null ? null : merge(
                                         local.generator_as_lists,  # Base: all 9 keys from generator
+                                        local.custom_names_raw,    # Override: any keys from JSON file
                                         {
                                           virtualmachine_names = {
                                             for vm_key, vm_val in local.custom_names_raw.virtualmachine_names :
-                                            vm_key => tolist(vm_val)  # Override with custom values
+                                            vm_key => tolist(vm_val)  # Convert arrays to lists
                                           }
                                         }
                                       )
