@@ -61,17 +61,6 @@ locals {
   // Use merge() to avoid type inconsistency errors
   // See: ~/docs/build_145_error_root_cause.md for detailed analysis
 
-  // Convert ALL custom naming virtualmachine_names attributes to lists
-  custom_names                       = local.custom_names_raw == null ? null : merge(
-                                        local.custom_names_raw,
-                                        {
-                                          virtualmachine_names = {
-                                            for vm_key, vm_val in local.custom_names_raw.virtualmachine_names :
-                                            vm_key => tolist(vm_val)  # Convert ALL to lists
-                                          }
-                                        }
-                                      )
-
   // Convert ALL generator virtualmachine_names attributes to lists
   generator_as_lists                = merge(
                                         module.sap_namegenerator.naming,
@@ -79,6 +68,20 @@ locals {
                                           virtualmachine_names = {
                                             for vm_key, vm_val in module.sap_namegenerator.naming.virtualmachine_names :
                                             vm_key => tolist(vm_val)  # Convert ALL to lists
+                                          }
+                                        }
+                                      )
+
+  // Merge custom naming with generator (fill missing keys with generator values)
+  // Custom naming JSON only has virtualmachine_names, but module expects all 9 keys
+  // Missing keys: availabilityset_names, keyvault_names, ppg_names, prefix,
+  //               resource_prefixes, resource_suffixes, separator, storageaccount_names
+  custom_names                       = local.custom_names_raw == null ? null : merge(
+                                        local.generator_as_lists,  # Base: all 9 keys from generator
+                                        {
+                                          virtualmachine_names = {
+                                            for vm_key, vm_val in local.custom_names_raw.virtualmachine_names :
+                                            vm_key => tolist(vm_val)  # Override with custom values
                                           }
                                         }
                                       )
